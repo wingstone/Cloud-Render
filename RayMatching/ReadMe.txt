@@ -1,0 +1,19 @@
+CreateWindow函数失败的原因可能之一：WndProc处理函数处理问题；
+档处理默认消息时：
+应该使用：" return DefWindowProc(hwnd, message, wParam, lParam); "
+而不应该是：" default : DefWindowProc(hwnd, message, wParam, lParam); return 0;"!!!!!!!!!!!!!!!!
+草泥马！不是第一次犯这样的错误了！
+
+CreateDevice时，注意flag参数与链接库是否对应，若flag参数含有 D3D_DEVICE_CREATE_DEBUG，则应链接到d3d11d.lib;
+
+向shader中传入matrix时，记得转置！！！！！！！！！！！！！！
+因为HLSL默认是以列传输从const buffer读取的，而matrix从内存写入const buffer时是以行传输为优先的，所以这里有一个默认的转置，必须要传入转置的矩阵，才会得到原来的矩阵。
+可以设置编译选项，以行优先读入矩阵，这样就不用传入矩阵的转置了。
+
+在HLSL中矩阵之间的相乘也必须用mul(x, y)函数！！不能直接用*相乘，虽然没有编译错误，但运算的结果是错的！！！！
+
+在HLSL中使用的自定义的的全局变量，如果不是外部赋值的变量，应该使用static进行声明并进行初始化；
+
+从2.0版本开始，HLSL就废除了noise函数；
+
+HLSL中的取余函数为"frac(x)"，这点与CG语言还是有差别的，CG中的取余函数为"faract(x)";
