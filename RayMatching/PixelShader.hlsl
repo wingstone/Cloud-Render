@@ -17,6 +17,8 @@ struct PS_INPUT
 
 #define DELTA 0.001
 
+#define HIGHT_QUALITY
+
 struct Ray
 {
 	float3 dir;
@@ -38,7 +40,16 @@ float Length(float3 pos, Sphere ball)
 //=======================Background Color===========================//
 float3 GetBGColor(float2 xy)
 {
-	return float3(0.4, 0.2, 0.1)*(1 - 0.25*length(xy));
+	return float3(0.7, 0.4, 0.3)*(1 - 0.25*length(xy));
+}
+
+float3 GetSkyColor(float2 xy)
+{
+	float len = length(xy - float2(0.5, 0.5));
+	float3 color1 = float3(0.0, 0.75, 0.9)*(1 - 0.05*len);
+	float3 color2 = lerp(color1, float3(0.8, 0.7, 0.8), 1 - len);
+	float3 sunCol = lerp(color2, float3(0.85, 0.75, 0.85), smoothstep(0.8, 0.95, 1 - len));
+	return sunCol;
 }
 
 //=======================RayMatching Color===========================//
@@ -144,6 +155,10 @@ static int RandomIndex[256] = {
 	5, 7, 6, 2, 10, 4, 3, 11, 9, 3, 4, 11, 2, 8, 0, 8, 6, 11, 2, 10, 10, 6, 0, 9, 6, 2, 3, 9, 2, 5, 4, 8, 
 };
 
+static int RandomIndex_Low[12] = {
+	2, 1, 0, 2, 4, 10, 10, 1, 7, 11, 7, 11
+};
+
 static float3 Gradiant[12] = {
 	{ 1, 1, 0 }, { 1, -1, 0 }, { -1, -1, 0 }, { -1, 1, 0 },
 	{ 0, 1, 1 }, { 0, -1, 1 }, { 0, -1, -1 }, { 0, 1, -1 },
@@ -173,6 +188,23 @@ float dotGridGradient3D(int3 pos, float3 frac)
 		return dot(grad, frac);
 }
 
+//随机性不是很好，但是高效的随机数用来求点积
+float dotGridGradient2D_Low(int ix, int iy, float x, float y)
+{
+	int index = RandomIndex_Low[ RandomIndex_Low[(RandomIndex_Low[ix % 12] + iy) % 12] ];
+	float3 grad = Gradiant[index];
+
+	return dot(grad, float3(x, y, 0));
+}
+
+float dotGridGradient3D_Low(int3 pos, float3 frac)
+{
+	int index = RandomIndex_Low[(RandomIndex_Low[(RandomIndex_Low[pos.x % 12] + pos.y) % 12] + pos.z) % 12];
+	float3 grad = Gradiant[index];
+
+	return dot(grad, frac);
+}
+
 //xy : (0, 0) - (screenWidth, screenHeight);
 float PerlinNoise2D(float2 xy, float frequency)		//pixel coord
 {
@@ -191,10 +223,17 @@ float PerlinNoise2D(float2 xy, float frequency)		//pixel coord
 	int y1 = y0 + 1;
 
 	float4 noise;
+#ifdef HIGHT_QUALITY
 	noise.x = dotGridGradient2D(x0, y0, dx, dy);
 	noise.y = dotGridGradient2D(x0, y1, dx, dy - 1);
 	noise.z = dotGridGradient2D(x1, y0, dx - 1, dy);
 	noise.w = dotGridGradient2D(x1, y1, dx - 1, dy - 1);
+#else
+	noise.x = dotGridGradient2D_Low(x0, y0, dx, dy);
+	noise.y = dotGridGradient2D_Low(x0, y1, dx, dy - 1);
+	noise.z = dotGridGradient2D_Low(x1, y0, dx - 1, dy);
+	noise.w = dotGridGradient2D_Low(x1, y1, dx - 1, dy - 1);
+#endif
 
 	dx = smoothstep(0, 1, dx);
 	dy = smoothstep(0, 1, dy);
@@ -227,15 +266,27 @@ float PerlinNoise3D(float3 xyz, float frequency)		//pixel coord
 	int z1 = z0 + 1;
 
 	float4 noise0, noise1;
-	noise0.x = dotGridGradient3D( int3(x0, y0, z0), float3(dx, dy, dz) );
-	noise0.y = dotGridGradient3D( int3(x0, y1, z0), float3(dx, dy - 1.0, dz) );
-	noise0.z = dotGridGradient3D( int3(x1, y0, z0), float3(dx - 1.0, dy, dz) );
-	noise0.w = dotGridGradient3D( int3(x1, y1, z0), float3(dx - 1.0, dy - 1.0, dz) );
+#ifdef HIGHT_QUALITY
+	noise0.x = dotGridGradient3D(int3(x0, y0, z0), float3(dx, dy, dz));
+	noise0.y = dotGridGradient3D(int3(x0, y1, z0), float3(dx, dy - 1.0, dz));
+	noise0.z = dotGridGradient3D(int3(x1, y0, z0), float3(dx - 1.0, dy, dz));
+	noise0.w = dotGridGradient3D(int3(x1, y1, z0), float3(dx - 1.0, dy - 1.0, dz));
 
-	noise1.x = dotGridGradient3D( int3(x0, y0, z1), float3(dx, dy, dz - 1.0) );
-	noise1.y = dotGridGradient3D( int3(x0, y1, z1), float3(dx, dy - 1.0, dz - 1.0) );
-	noise1.z = dotGridGradient3D( int3(x1, y0, z1), float3(dx - 1.0, dy, dz - 1.0) );
-	noise1.w = dotGridGradient3D( int3(x1, y1, z1), float3(dx - 1.0, dy - 1.0, dz - 1.0) );
+	noise1.x = dotGridGradient3D(int3(x0, y0, z1), float3(dx, dy, dz - 1.0));
+	noise1.y = dotGridGradient3D(int3(x0, y1, z1), float3(dx, dy - 1.0, dz - 1.0));
+	noise1.z = dotGridGradient3D(int3(x1, y0, z1), float3(dx - 1.0, dy, dz - 1.0));
+	noise1.w = dotGridGradient3D(int3(x1, y1, z1), float3(dx - 1.0, dy - 1.0, dz - 1.0));
+#else
+	noise0.x = dotGridGradient3D_Low( int3(x0, y0, z0), float3(dx, dy, dz) );
+	noise0.y = dotGridGradient3D_Low( int3(x0, y1, z0), float3(dx, dy - 1.0, dz) );
+	noise0.z = dotGridGradient3D_Low( int3(x1, y0, z0), float3(dx - 1.0, dy, dz) );
+	noise0.w = dotGridGradient3D_Low( int3(x1, y1, z0), float3(dx - 1.0, dy - 1.0, dz) );
+
+	noise1.x = dotGridGradient3D_Low( int3(x0, y0, z1), float3(dx, dy, dz - 1.0) );
+	noise1.y = dotGridGradient3D_Low( int3(x0, y1, z1), float3(dx, dy - 1.0, dz - 1.0) );
+	noise1.z = dotGridGradient3D_Low( int3(x1, y0, z1), float3(dx - 1.0, dy, dz - 1.0) );
+	noise1.w = dotGridGradient3D_Low( int3(x1, y1, z1), float3(dx - 1.0, dy - 1.0, dz - 1.0) );
+#endif
 	
 	dx = smoothstep(0, 1, dx);
 	dy = smoothstep(0, 1, dy);
@@ -302,7 +353,7 @@ float Marble(float2 xy, float frequency)
 }
 
 //=======================================Volumetric render test======================//
-float3 GetColor(float density, float dist)
+float3 GetVoxelColor(float density, float dist)
 {
 	return lerp(float3(0.9, 0.8, 0.7), float3(0.4, 0.1, 0.05), density*density);
 }
@@ -329,8 +380,8 @@ float3 Volumetric(float2 xy)
 	ray.dir = normalize(float3(xy, 1.732));		//y方向fov为60度
 	ray.pos = float3(0, 0, 0);
 	
-	ray.dir = mul(float4(ray.dir, 0.0), View);		//变换射线位置和方向
-	ray.pos = mul(float4(ray.pos, 1.0), View);
+	ray.dir = mul(float4(ray.dir, 0.0), View).xyz;		//变换射线位置和方向
+	ray.pos = mul(float4(ray.pos, 1.0), View).xyz;
 
 
 	//set sphere
@@ -376,7 +427,87 @@ float3 Volumetric(float2 xy)
 			ray.pos += ray.dir*0.05;
 			float density = FractalNoise3D(ray.pos, 1.8);
 			float dist = distance(ray.pos, ball.center);
-			float3 localCol = GetColor(density, dist) * density;
+			float3 localCol = GetVoxelColor(density, dist) * density;
+
+			sumCol += localCol * (1 - alpha);
+			alpha += density * (1 - alpha);
+
+		}
+	}
+
+	alpha = clamp(0, 1, alpha);
+	sumCol = lerp(bgcolor, sumCol, alpha);
+
+	return sumCol;
+}
+
+//=======================================3D Cloud=============================//
+matrix SetViewMatrix(float3 eye, float3 at)
+{
+	//set View matrix
+	float3 up = float3(0.0, 1.0, 0.0);
+
+	matrix trans = (matrix)0; trans[3] = float4(eye, 1.0); trans[0][0] = trans[1][1] = trans[2][2] = trans[3][3] = 1;
+
+	float3 front = normalize((at - eye).xyz);
+	float3 right = cross(up, front);
+	up = cross(front, right);
+
+	matrix rotate = (matrix)0; rotate[0] = float4(right, 0.0); rotate[1] = float4(up, 0.0); rotate[2] = float4(front, 0.0); rotate[3][3] = 1;
+
+	return mul(trans, rotate);
+}
+
+float3 GetCloudVoxelColor(float density, float dist)
+{
+	return lerp(float3(0.9, 0.8, 0.7), float3(0.5, 0.6, 0.5), density*density);
+}
+
+float3 Get3DCloudColor(float2 xy)
+{
+	float3 eye = float3(0, 5, -10);
+	float3 at = float3(0, 2, 0);
+	matrix View = SetViewMatrix(eye, at);
+
+	//set ray
+	Ray ray;
+	ray.dir = normalize(float3(xy, 1.732));		//y方向fov为60度
+	ray.pos = float3(0, 0, 0);
+
+	ray.dir = mul(float4(ray.dir, 0.0), View).xyz;		//变换射线位置和方向
+	ray.pos = mul(float4(ray.pos, 1.0), View).xyz;
+
+	//cloud height range: (0, 2)
+	//采用相交测试，对未相交像素，返回背景色
+	float len = 0;
+	float3 bgcolor = GetSkyColor(xy);
+	if (abs(ray.dir.y) <= DELTA)		//与云层平行
+	{
+		return bgcolor;
+	}
+	
+	len = -3 / ray.dir.y;
+	if (len < 0)	//视线远离云层
+	{
+		return bgcolor;
+	}
+
+	ray.pos += len *ray.dir;
+
+	//在云层内进行步进
+	float alpha = 0;
+	float3 sumCol = (float3)0;
+	for (int i = 0; i < 40; i++)
+	{
+		if (ray.pos.y < 0 || alpha >= 1)	//穿出小球或颜色累积足够
+		{
+			break;
+		}
+		else		//步进累计颜色
+		{
+			ray.pos += ray.dir*0.05;
+			float density = FractalNoise3D(ray.pos, 1.8);
+			float3 localCol = GetCloudVoxelColor(density, 0) * density;
 
 			sumCol += localCol * (1 - alpha);
 			alpha += density * (1 - alpha);
@@ -431,8 +562,12 @@ float4 main(PS_INPUT input) : SV_TARGET
 	//float3 color = float3(gray, gray, gray);
 
 	////==========================Volumetric render=======================//
+	//float2 xy = input.xy * 2 / float2(ScreenHeight, ScreenHeight);
+	//float3 color = Volumetric(xy);
+
+	////==========================3D Cloud render=======================//
 	float2 xy = input.xy * 2 / float2(ScreenHeight, ScreenHeight);
-	float3 color = Volumetric(xy);
+	float3 color = Get3DCloudColor(xy);
 
 	return float4(color, 1.0);
 }

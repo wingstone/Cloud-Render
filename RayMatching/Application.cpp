@@ -226,21 +226,32 @@ bool Application::InitialShader()
 	//create shader
 	ID3DBlob* vertexBlob;
 	ID3DBlob* pixelBlob;
-	ID3DBlob* errorMessage;
-	hr = D3DCompileFromFile(L"VertexShader.hlsl", nullptr, nullptr, "main", "vs_5_0", D3DCOMPILE_ENABLE_STRICTNESS, 0, &vertexBlob, &errorMessage);
+	ID3DBlob* errorMessage = nullptr;
+
+	//从已编译好的cso文件中加载shader
+	hr = D3DReadFileToBlob(L"VertexShader.cso", &vertexBlob);
 	if (FAILED(hr))
-	{
-		MessageBox(nullptr, (char*)errorMessage->GetBufferPointer(), nullptr, MB_OK);
-		SAFE_RELEASE(errorMessage);
 		return false;
-	}
-	hr = D3DCompileFromFile(L"PixelShader.hlsl", nullptr, nullptr, "main", "ps_5_0", D3DCOMPILE_ENABLE_STRICTNESS, 0, &pixelBlob, &errorMessage);
+	
+	hr = D3DReadFileToBlob(L"PixelShader.cso", &pixelBlob);
 	if (FAILED(hr))
-	{
-		MessageBox(nullptr, (char*)errorMessage->GetBufferPointer(), nullptr, MB_OK);
-		SAFE_RELEASE(errorMessage);
 		return false;
-	}
+
+	////重新从文本文件中编译shader
+	//hr = D3DCompileFromFile(L"VertexShader.hlsl", nullptr, nullptr, "main", "vs_5_0", D3DCOMPILE_ENABLE_STRICTNESS, 0, &vertexBlob, &errorMessage);
+	//if (FAILED(hr))
+	//{
+	//	MessageBox(nullptr, (char*)errorMessage->GetBufferPointer(), nullptr, MB_OK);
+	//	SAFE_RELEASE(errorMessage);
+	//	return false;
+	//}
+	//hr = D3DCompileFromFile(L"PixelShader.hlsl", nullptr, nullptr, "main", "ps_5_0", D3DCOMPILE_ENABLE_STRICTNESS, 0, &pixelBlob, &errorMessage);
+	//if (FAILED(hr))
+	//{
+	//	MessageBox(nullptr, (char*)errorMessage->GetBufferPointer(), nullptr, MB_OK);
+	//	SAFE_RELEASE(errorMessage);
+	//	return false;
+	//}
 
 	hr = _device->CreateVertexShader(vertexBlob->GetBufferPointer(), vertexBlob->GetBufferSize(), nullptr, &_vertexShader);
 	if (FAILED(hr))
