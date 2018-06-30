@@ -17,7 +17,7 @@ struct PS_INPUT
 
 #define DELTA 0.001
 
-#define HIGHT_QUALITY
+//#define HIGHT_QUALITY
 
 struct Ray
 {
@@ -257,6 +257,8 @@ float PerlinNoise3D(float3 xyz, float frequency)		//pixel coord
 	float dy = xyz.y - y0;
 	float dz = xyz.z - z0;
 
+	float4 noise0, noise1;
+#ifdef HIGHT_QUALITY
 	x0 = (x0 % 256 + 256) % 256;		//处理xyz为负数的情况
 	y0 = (y0 % 256 + 256) % 256;
 	z0 = (z0 % 256 + 256) % 256;
@@ -265,8 +267,6 @@ float PerlinNoise3D(float3 xyz, float frequency)		//pixel coord
 	int y1 = y0 + 1;
 	int z1 = z0 + 1;
 
-	float4 noise0, noise1;
-#ifdef HIGHT_QUALITY
 	noise0.x = dotGridGradient3D(int3(x0, y0, z0), float3(dx, dy, dz));
 	noise0.y = dotGridGradient3D(int3(x0, y1, z0), float3(dx, dy - 1.0, dz));
 	noise0.z = dotGridGradient3D(int3(x1, y0, z0), float3(dx - 1.0, dy, dz));
@@ -277,6 +277,14 @@ float PerlinNoise3D(float3 xyz, float frequency)		//pixel coord
 	noise1.z = dotGridGradient3D(int3(x1, y0, z1), float3(dx - 1.0, dy, dz - 1.0));
 	noise1.w = dotGridGradient3D(int3(x1, y1, z1), float3(dx - 1.0, dy - 1.0, dz - 1.0));
 #else
+	x0 = (x0 % 12 + 12) % 12;		//处理xyz为负数的情况
+	y0 = (y0 % 12 + 12) % 12;
+	z0 = (z0 % 12 + 12) % 12;
+
+	int x1 = x0 + 1;
+	int y1 = y0 + 1;
+	int z1 = z0 + 1;
+
 	noise0.x = dotGridGradient3D_Low( int3(x0, y0, z0), float3(dx, dy, dz) );
 	noise0.y = dotGridGradient3D_Low( int3(x0, y1, z0), float3(dx, dy - 1.0, dz) );
 	noise0.z = dotGridGradient3D_Low( int3(x1, y0, z0), float3(dx - 1.0, dy, dz) );
@@ -306,6 +314,7 @@ float PerlinNoise3D(float3 xyz, float frequency)		//pixel coord
 }
 
 //===============================using Perlin================================//
+//分形叠加后的perlin noise
 float FractalNoise2D(float2 xy, float frequency)
 {
 	float gray = PerlinNoise2D(xy, frequency) + 0.5*PerlinNoise2D(xy, 2 * frequency) + 0.25*PerlinNoise2D(xy, 4 * frequency) + 0.125*PerlinNoise2D(xy, 8 * frequency);
@@ -321,7 +330,6 @@ float FractalNoise3D(float3 xyz, float frequency)
 	gray = clamp(gray, 0, 1);
 	return gray;
 }
-
 
 //Turbulence texture
 float Turbulence(float2 xy, float frequency)
@@ -460,13 +468,14 @@ matrix SetViewMatrix(float3 eye, float3 at)
 
 float3 GetCloudVoxelColor(float density, float dist)
 {
+	density *= smoothstep(0, 1, 0.25 * (1 - dist) );
 	return lerp(float3(0.9, 0.8, 0.7), float3(0.5, 0.6, 0.5), density*density);
 }
 
 float3 Get3DCloudColor(float2 xy)
 {
 	float3 eye = float3(0, 5, -10);
-	float3 at = float3(0, 2, 0);
+	float3 at = float3(0, 4, 0);
 	matrix View = SetViewMatrix(eye, at);
 
 	//set ray
@@ -479,6 +488,7 @@ float3 Get3DCloudColor(float2 xy)
 
 	//cloud height range: (0, 2)
 	//采用相交测试，对未相交像素，返回背景色
+	float2 range = float2(-3, 4);
 	float len = 0;
 	float3 bgcolor = GetSkyColor(xy);
 	if (abs(ray.dir.y) <= DELTA)		//与云层平行
@@ -486,7 +496,7 @@ float3 Get3DCloudColor(float2 xy)
 		return bgcolor;
 	}
 	
-	len = -3 / ray.dir.y;
+	len = (range.y - ray.pos.y) / ray.dir.y;
 	if (len < 0)	//视线远离云层
 	{
 		return bgcolor;
@@ -499,15 +509,16 @@ float3 Get3DCloudColor(float2 xy)
 	float3 sumCol = (float3)0;
 	for (int i = 0; i < 40; i++)
 	{
-		if (ray.pos.y < 0 || alpha >= 1)	//穿出小球或颜色累积足够
+		if (ray.pos.y < range.x || alpha >= 1)	//穿出云层或颜色累积足够
 		{
 			break;
 		}
 		else		//步进累计颜色
 		{
-			ray.pos += ray.dir*0.05;
-			float density = FractalNoise3D(ray.pos, 1.8);
-			float3 localCol = GetCloudVoxelColor(density, 0) * density;
+			ray.pos += ray.dir*0.15;
+			float density = FractalNoise3D(ray.pos, 0.8);
+			float dist = abs( ray.pos.y - ( range.x + range.y) / 2);
+			float3 localCol = GetCloudVoxelColor(density, dist) * density;
 
 			sumCol += localCol * (1 - alpha);
 			alpha += density * (1 - alpha);
