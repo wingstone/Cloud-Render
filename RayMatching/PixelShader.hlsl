@@ -468,14 +468,14 @@ matrix SetViewMatrix(float3 eye, float3 at)
 
 float3 GetCloudVoxelColor(float density, float dist)
 {
-	density *= smoothstep(0, 1, 0.25 * (1 - dist) );
-	return lerp(float3(0.9, 0.8, 0.7), float3(0.5, 0.6, 0.5), density*density);
+	//density *= smoothstep(0, 1, 1 - pow(dist, 4))*4;
+	return lerp(float3(1.0, 0.98, 0.94), float3(0.56, 0.56, 0.56), density*density);
 }
 
 float3 Get3DCloudColor(float2 xy)
 {
-	float3 eye = float3(0, 5, -10);
-	float3 at = float3(0, 4, 0);
+	float3 eye = float3(0, 0, -10);
+	float3 at = float3(0, 6, 0);
 	matrix View = SetViewMatrix(eye, at);
 
 	//set ray
@@ -488,7 +488,7 @@ float3 Get3DCloudColor(float2 xy)
 
 	//cloud height range: (0, 2)
 	//采用相交测试，对未相交像素，返回背景色
-	float2 range = float2(-3, 4);
+	float2 range = float2(6, 9);
 	float len = 0;
 	float3 bgcolor = GetSkyColor(xy);
 	if (abs(ray.dir.y) <= DELTA)		//与云层平行
@@ -496,7 +496,7 @@ float3 Get3DCloudColor(float2 xy)
 		return bgcolor;
 	}
 	
-	len = (range.y - ray.pos.y) / ray.dir.y;
+	len = (range.x - ray.pos.y) / ray.dir.y;
 	if (len < 0)	//视线远离云层
 	{
 		return bgcolor;
@@ -507,17 +507,19 @@ float3 Get3DCloudColor(float2 xy)
 	//在云层内进行步进
 	float alpha = 0;
 	float3 sumCol = (float3)0;
+	float mid = range.x + range.y / 2;
+	float width = range.y - range.x;
 	for (int i = 0; i < 40; i++)
 	{
-		if (ray.pos.y < range.x || alpha >= 1)	//穿出云层或颜色累积足够
+		if (ray.pos.y > range.y || alpha >= 1)	//穿出云层或颜色累积足够
 		{
 			break;
 		}
 		else		//步进累计颜色
 		{
-			ray.pos += ray.dir*0.15;
-			float density = FractalNoise3D(ray.pos, 0.8);
-			float dist = abs( ray.pos.y - ( range.x + range.y) / 2);
+			ray.pos += ray.dir*0.1;
+			float density = FractalNoise3D(ray.pos, 0.2);
+			float dist = abs(ray.pos.y - mid) / width*2.0;		//归一化到云层中间距离(0,1)
 			float3 localCol = GetCloudVoxelColor(density, dist) * density;
 
 			sumCol += localCol * (1 - alpha);
@@ -528,6 +530,10 @@ float3 Get3DCloudColor(float2 xy)
 
 	alpha = clamp(0, 1, alpha);
 	sumCol = lerp(bgcolor, sumCol, alpha);
+
+	float3 fogColor = float3(0.59, 0.80, 0.80);
+	float factor = clamp(0, 1, (distance(eye, ray.pos) - 20.0)/ 80.0);
+	sumCol = lerp(sumCol, fogColor, factor);
 
 	return sumCol;
 }
