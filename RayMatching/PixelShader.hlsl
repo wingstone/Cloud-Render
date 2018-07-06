@@ -43,15 +43,6 @@ float3 GetBGColor(float2 xy)
 	return float3(0.7, 0.4, 0.3)*(1 - 0.25*length(xy));
 }
 
-float3 GetSkyColor(float2 xy)
-{
-	float len = length(xy - float2(0.5, 0.5));
-	float3 color1 = float3(0.0, 0.75, 0.9)*(1 - 0.05*len);
-	float3 color2 = lerp(color1, float3(0.8, 0.7, 0.8), 1 - len);
-	float3 sunCol = lerp(color2, float3(0.85, 0.75, 0.85), smoothstep(0.8, 0.95, 1 - len));
-	return sunCol;
-}
-
 //=======================RayMatching Color===========================//
 float3 RayMatching(float2 xy)
 {
@@ -444,7 +435,7 @@ float3 Volumetric(float2 xy)
 	}
 
 	alpha = clamp(0, 1, alpha);
-	sumCol = lerp(bgcolor, sumCol, alpha);
+	sumCol += bgcolor*(1- alpha);
 
 	return sumCol;
 }
@@ -466,10 +457,22 @@ matrix SetViewMatrix(float3 eye, float3 at)
 	return mul(trans, rotate);
 }
 
+float3 GetSkyColor(float2 xy, float3 rayDir, float3 sunDir)
+{
+	float len = length(xy - float2(0.5, 0.5));
+	float3 color1 = float3(0.0, 0.75, 0.9)*(1 - 0.05*len);
+	color1 = lerp(color1, float3(0.85, 0.8, 0.8), 1 - 0.5*len);
+
+	float factor = dot(rayDir, sunDir);
+	color1 = lerp(color1, float3(1.0, 0.98, 0.94), smoothstep(0.85, 0.95, factor*factor) );
+	return color1;
+}
+
 float3 GetCloudVoxelColor(float density, float dist)
 {
-	//density *= smoothstep(0, 1, 1 - pow(dist, 4))*4;
-	return lerp(float3(1.0, 0.98, 0.94), float3(0.56, 0.56, 0.56), density*density);
+	float3 light = lerp(float3(1.0, 0.98, 0.94)*1.1, float3(0.75, 0.75, 0.75), dist*0.1);
+	float3 cloud = lerp(float3(0.95, 0.95, 0.95), float3(0.3, 0.2, 0.2), density*density);
+	return cloud*light;
 }
 
 float3 Get3DCloudColor(float2 xy)
@@ -488,9 +491,11 @@ float3 Get3DCloudColor(float2 xy)
 
 	//cloud height range: (0, 2)
 	//采用相交测试，对未相交像素，返回背景色
-	float2 range = float2(6, 9);
+	float2 range = float2(6, 10);
 	float len = 0;
-	float3 bgcolor = GetSkyColor(xy);
+	float3 sunDir = normalize(float3(0.5, 0.5, 1.732));
+	sunDir = mul(float4(sunDir, 0.0), View).xyz;
+	float3 bgcolor = GetSkyColor(xy, ray.dir, sunDir);
 	if (abs(ray.dir.y) <= DELTA)		//与云层平行
 	{
 		return bgcolor;
@@ -507,8 +512,9 @@ float3 Get3DCloudColor(float2 xy)
 	//在云层内进行步进
 	float alpha = 0;
 	float3 sumCol = (float3)0;
-	float mid = range.x + range.y / 2;
+	float mid = (range.x + range.y) / 2;
 	float width = range.y - range.x;
+	float t = 0.1;
 	for (int i = 0; i < 40; i++)
 	{
 		if (ray.pos.y > range.y || alpha >= 1)	//穿出云层或颜色累积足够
@@ -517,10 +523,16 @@ float3 Get3DCloudColor(float2 xy)
 		}
 		else		//步进累计颜色
 		{
-			ray.pos += ray.dir*0.1;
+			t += min(0.1, t*0.05);
+			ray.pos += ray.dir*t;
 			float density = FractalNoise3D(ray.pos, 0.2);
-			float dist = abs(ray.pos.y - mid) / width*2.0;		//归一化到云层中间距离(0,1)
-			float3 localCol = GetCloudVoxelColor(density, dist) * density;
+			float densityDif = FractalNoise3D(ray.pos + 0.5*sunDir, 0.2);
+			float dist = abs(ray.pos.y - mid);
+			density *= smoothstep(0, 1, width/2 - dist);		//根据高度调整密度
+			densityDif *= smoothstep(0.2, 2, width / 2 - dist);
+
+			float dif = clamp(0, 1, density - densityDif);		//本点与光线方向某点的密度差
+			float3 localCol = GetCloudVoxelColor(density, dif) * density;
 
 			sumCol += localCol * (1 - alpha);
 			alpha += density * (1 - alpha);
@@ -529,9 +541,9 @@ float3 Get3DCloudColor(float2 xy)
 	}
 
 	alpha = clamp(0, 1, alpha);
-	sumCol = lerp(bgcolor, sumCol, alpha);
+	sumCol += bgcolor*(1 - alpha);
 
-	float3 fogColor = float3(0.59, 0.80, 0.80);
+	float3 fogColor = float3(0.94, 1.00, 0.94);
 	float factor = clamp(0, 1, (distance(eye, ray.pos) - 20.0)/ 80.0);
 	sumCol = lerp(sumCol, fogColor, factor);
 
