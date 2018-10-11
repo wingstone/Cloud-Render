@@ -1,5 +1,5 @@
 CreateWindow函数失败的原因可能之一：WndProc处理函数处理问题；
-档处理默认消息时：
+当处WndProc函数理默认消息时：
 应该使用：" return DefWindowProc(hwnd, message, wParam, lParam); "
 而不应该是：" default : DefWindowProc(hwnd, message, wParam, lParam); return 0;"!!!!!!!!!!!!!!!!
 草泥马！不是第一次犯这样的错误了！
@@ -16,4 +16,4 @@ CreateDevice时，注意flag参数与链接库是否对应，若flag参数含有 D3D_DEVICE_CREATE_D
 
 从2.0版本开始，HLSL就废除了noise函数；
 
-HLSL中的取余函数为"frac(x)"，这点与CG语言还是有差别的，CG中的取余函数为"faract(x)";
+HLSL中的取余函数为"frac(x)"，这点与CG语言还是有差别的，CG中的取余函数为"fract(x)";

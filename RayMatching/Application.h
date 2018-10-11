@@ -6,8 +6,8 @@
 
 #include "Commen.h"
 
-#define SCREENWIDTH 800
-#define SCREENHEIGHT 600
+#define SCREENWIDTH 640
+#define SCREENHEIGHT 480
 
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "d3d11.lib")
